@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -23,14 +24,8 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Create Reddit client
-	client := reddit.NewClient(
-		cfg.ClientID,
-		cfg.ClientSecret,
-		cfg.Username,
-		cfg.Password,
-		cfg.UserAgent,
-	)
+	// Create Reddit RSS client
+	client := reddit.NewClient(cfg.UserAgent)
 
 	// Create context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())
@@ -55,7 +50,7 @@ func main() {
 		handleNewPost,
 	)
 
-	log.Printf("Monitoring r/%s for new posts...", cfg.Subreddit)
+	log.Printf("Monitoring r/%s for new posts (via RSS)...", cfg.Subreddit)
 	log.Println("Press Ctrl+C to stop")
 	log.Println("")
 
@@ -72,29 +67,18 @@ func handleNewPost(post reddit.Post) {
 
 	fmt.Println("")
 	fmt.Println("═══════════════════════════════════════════════════════════════")
-	fmt.Printf("🆕 NEW POST in r/%s\n", post.Subreddit)
+	fmt.Printf("NEW POST in r/%s\n", post.Subreddit)
 	fmt.Println("═══════════════════════════════════════════════════════════════")
-	fmt.Printf("📝 Title: %s\n", post.Title)
-	fmt.Printf("👤 Author: u/%s\n", post.Author)
-	fmt.Printf("⏰ Posted: %s ago\n", age)
-	if post.Flair != "" {
-		fmt.Printf("🏷️  Flair: %s\n", post.Flair)
+	fmt.Printf("Title:  %s\n", post.Title)
+	fmt.Printf("Author: u/%s\n", post.Author)
+	fmt.Printf("Posted: %s ago\n", age)
+	if len(post.Categories) > 0 {
+		fmt.Printf("Tags:   %s\n", strings.Join(post.Categories, ", "))
 	}
-	fmt.Printf("🔗 Link: %s\n", post.GetFullPermalink())
-
-	if post.IsSelf && post.SelfText != "" {
-		// Truncate long self text
-		text := post.SelfText
-		if len(text) > 200 {
-			text = text[:200] + "..."
-		}
-		fmt.Printf("📄 Text: %s\n", text)
-	}
-
+	fmt.Printf("Link:   %s\n", post.GetFullPermalink())
 	fmt.Println("═══════════════════════════════════════════════════════════════")
 	fmt.Println("")
 
-	// Play a sound or send a notification (platform-specific)
-	// You could add desktop notifications, Discord webhooks, etc.
-	fmt.Print("\a") // Terminal bell
+	// Terminal bell for notification
+	fmt.Print("\a")
 }
