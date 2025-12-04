@@ -16,13 +16,17 @@ type Config struct {
 	Subreddit    string
 	PollInterval time.Duration
 	PostLimit    int
+
+	// Discord integration
+	DiscordWebhookURL string
 }
 
 // Load reads configuration from environment variables
 func Load() (*Config, error) {
 	cfg := &Config{
-		UserAgent: os.Getenv("USER_AGENT"),
-		Subreddit: os.Getenv("SUBREDDIT"),
+		UserAgent:         os.Getenv("USER_AGENT"),
+		Subreddit:         os.Getenv("SUBREDDIT"),
+		DiscordWebhookURL: os.Getenv("DISCORD_WEBHOOK_URL"),
 	}
 
 	// Set defaults
