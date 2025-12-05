@@ -1,0 +1,28 @@
+[Unit]
+Description=Reddit Poker Bot - Monitor r/poker for new posts
+After=network.target
+
+[Service]
+Type=simple
+User=reddit-bot
+Group=reddit-bot
+WorkingDirectory=/opt/reddit-poker-bot
+ExecStart=/opt/reddit-poker-bot/reddit-poker-bot
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=reddit-poker-bot
+
+# Load environment variables from .env file
+EnvironmentFile=/opt/reddit-poker-bot/.env
+
+# Security hardening
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/reddit-poker-bot
+
+[Install]
+WantedBy=multi-user.target

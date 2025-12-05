@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -13,25 +14,36 @@ type Config struct {
 	UserAgent string
 
 	// Monitoring settings
-	Subreddit    string
+	Subreddits   []string
 	PollInterval time.Duration
 	PostLimit    int
 
 	// Discord integration
 	DiscordWebhookURL string
+
+	// Claude AI integration
+	AnthropicAPIKey string
 }
 
 // Load reads configuration from environment variables
 func Load() (*Config, error) {
 	cfg := &Config{
 		UserAgent:         os.Getenv("USER_AGENT"),
-		Subreddit:         os.Getenv("SUBREDDIT"),
 		DiscordWebhookURL: os.Getenv("DISCORD_WEBHOOK_URL"),
+		AnthropicAPIKey:   os.Getenv("ANTHROPIC_API_KEY"),
 	}
 
-	// Set defaults
-	if cfg.Subreddit == "" {
-		cfg.Subreddit = "poker"
+	// Parse comma-separated subreddits
+	subredditStr := os.Getenv("SUBREDDIT")
+	if subredditStr == "" {
+		cfg.Subreddits = []string{"poker"}
+	} else {
+		// Split by comma and trim whitespace
+		subreddits := strings.Split(subredditStr, ",")
+		for i, s := range subreddits {
+			subreddits[i] = strings.TrimSpace(s)
+		}
+		cfg.Subreddits = subreddits
 	}
 
 	if cfg.UserAgent == "" {

@@ -19,8 +19,9 @@ type WebhookClient struct {
 
 // WebhookMessage represents a Discord webhook message
 type WebhookMessage struct {
-	Content string  `json:"content,omitempty"`
-	Embeds  []Embed `json:"embeds,omitempty"`
+	Content    string  `json:"content,omitempty"`
+	Embeds     []Embed `json:"embeds,omitempty"`
+	ThreadName string  `json:"thread_name,omitempty"`
 }
 
 // Embed represents a Discord embed
@@ -118,6 +119,65 @@ func (c *WebhookClient) send(ctx context.Context, msg WebhookMessage) error {
 	}
 
 	return nil
+}
+
+// SendPostWithResponses sends a Reddit post to Discord with suggested responses in a thread
+func (c *WebhookClient) SendPostWithResponses(ctx context.Context, post reddit.Post, witty, formal, block52 string) error {
+	if c.webhookURL == "" {
+		return nil // Discord integration disabled
+	}
+
+	age := time.Since(post.CreatedAt)
+	ageStr := formatDuration(age)
+
+	embed := Embed{
+		Title:     post.Title,
+		URL:       post.GetFullPermalink(),
+		Color:     0xFF4500, // Reddit orange
+		Timestamp: post.CreatedAt,
+		Author: &Author{
+			Name: fmt.Sprintf("u/%s", post.Author),
+			URL:  fmt.Sprintf("https://reddit.com/u/%s", post.Author),
+		},
+		Footer: &Footer{
+			Text: fmt.Sprintf("r/%s • Posted %s ago", post.Subreddit, ageStr),
+		},
+	}
+
+	// Create thread name from post title (max 100 chars)
+	threadName := post.Title
+	if len(threadName) > 97 {
+		threadName = threadName[:97] + "..."
+	}
+
+	msg := WebhookMessage{
+		Embeds:     []Embed{embed},
+		ThreadName: "Response Suggestions: " + threadName,
+	}
+
+	// Send initial message with thread
+	if err := c.send(ctx, msg); err != nil {
+		return err
+	}
+
+	// Note: To post the responses in the thread, we'd need to use the ?thread_id parameter
+	// For now, we'll send them as a follow-up message in the thread
+	// This requires getting the thread ID from the first message response
+
+	// Create a follow-up message with the responses
+	responseContent := fmt.Sprintf("**Suggested Responses:**\n\n**1️⃣ Witty:**\n%s\n\n**2️⃣ Formal:**\n%s\n\n**3️⃣ Block52 Angle:**\n%s",
+		witty, formal, block52)
+
+	followUpMsg := WebhookMessage{
+		Content: responseContent,
+	}
+
+	// Wait a moment for the thread to be created
+	time.Sleep(500 * time.Millisecond)
+
+	// Send follow-up (this will go in the main channel for now)
+	// To properly thread, we'd need Discord API, not just webhooks
+	return c.send(ctx, followUpMsg)
 }
 
 // formatDuration formats a duration in a human-readable way

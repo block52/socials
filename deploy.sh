@@ -46,7 +46,16 @@ echo -e "${YELLOW}[2/6]${NC} Preparing deployment files..."
 TEMP_DIR=$(mktemp -d)
 cp ${BINARY_NAME}-linux $TEMP_DIR/$BINARY_NAME
 cp $SERVICE_NAME $TEMP_DIR/
-cp .env.example $TEMP_DIR/.env
+
+# Use .env if it exists, otherwise use .env.example
+if [ -f .env ]; then
+    echo "Using existing .env file"
+    cp .env $TEMP_DIR/.env
+else
+    echo "Using .env.example as template"
+    cp .env.example $TEMP_DIR/.env
+fi
+
 echo -e "${GREEN}✓${NC} Files prepared in $TEMP_DIR"
 
 # Step 3: Create deployment script that will run on the server

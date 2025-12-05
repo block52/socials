@@ -7,9 +7,11 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
+	"github.com/block52/reddit-poker-bot/internal/claude"
 	"github.com/block52/reddit-poker-bot/internal/config"
 	"github.com/block52/reddit-poker-bot/internal/discord"
 	"github.com/block52/reddit-poker-bot/internal/reddit"
@@ -34,6 +36,12 @@ func main() {
 		log.Println("Discord webhook integration enabled")
 	}
 
+	// Create Claude API client
+	claudeClient := claude.NewClient(cfg.AnthropicAPIKey)
+	if cfg.AnthropicAPIKey != "" {
+		log.Println("Claude AI integration enabled for response generation")
+	}
+
 	// Create context with cancellation
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -50,31 +58,43 @@ func main() {
 
 	// Create post handler that sends to Discord
 	postHandler := func(post reddit.Post) {
-		handleNewPost(ctx, post, discordClient)
+		handleNewPost(ctx, post, discordClient, claudeClient)
 	}
 
-	// Create and start monitor
-	monitor := reddit.NewMonitor(
-		client,
-		cfg.Subreddit,
-		cfg.PollInterval,
-		cfg.PostLimit,
-		postHandler,
-	)
+	// Start a monitor for each subreddit
+	var wg sync.WaitGroup
+	for _, subreddit := range cfg.Subreddits {
+		wg.Add(1)
+		go func(sub string) {
+			defer wg.Done()
 
-	log.Printf("Monitoring r/%s for new posts (via RSS)...", cfg.Subreddit)
+			monitor := reddit.NewMonitor(
+				client,
+				sub,
+				cfg.PollInterval,
+				cfg.PostLimit,
+				postHandler,
+			)
+
+			log.Printf("Starting monitor for r/%s", sub)
+
+			if err := monitor.Start(ctx); err != nil && err != context.Canceled {
+				log.Printf("Monitor error for r/%s: %v", sub, err)
+			}
+		}(subreddit)
+	}
+
+	log.Printf("Monitoring %d subreddit(s): %s", len(cfg.Subreddits), strings.Join(cfg.Subreddits, ", "))
 	log.Println("Press Ctrl+C to stop")
 	log.Println("")
 
-	if err := monitor.Start(ctx); err != nil && err != context.Canceled {
-		log.Fatalf("Monitor error: %v", err)
-	}
+	wg.Wait()
 
 	log.Println("Bot stopped")
 }
 
 // handleNewPost is called when a new post is detected
-func handleNewPost(ctx context.Context, post reddit.Post, discordClient *discord.WebhookClient) {
+func handleNewPost(ctx context.Context, post reddit.Post, discordClient *discord.WebhookClient, claudeClient *claude.Client) {
 	age := time.Since(post.CreatedAt).Round(time.Second)
 
 	// Print to terminal
@@ -95,10 +115,35 @@ func handleNewPost(ctx context.Context, post reddit.Post, discordClient *discord
 	// Terminal bell for notification
 	fmt.Print("\a")
 
-	// Send to Discord
-	if err := discordClient.SendPost(ctx, post); err != nil {
-		log.Printf("Failed to send to Discord: %v", err)
+	// Generate AI responses if Claude is enabled
+	if claudeClient != nil {
+		log.Println("Generating response suggestions with Claude AI...")
+		responses, err := claudeClient.GenerateResponses(ctx, post)
+		if err != nil {
+			log.Printf("Failed to generate responses: %v", err)
+			// Fall back to posting without responses
+			if err := discordClient.SendPost(ctx, post); err != nil {
+				log.Printf("Failed to send to Discord: %v", err)
+			} else {
+				log.Println("✓ Posted to Discord")
+			}
+			return
+		}
+
+		log.Println("✓ Generated response suggestions")
+
+		// Send to Discord with responses in a thread
+		if err := discordClient.SendPostWithResponses(ctx, post, responses.Witty, responses.Formal, responses.Block52); err != nil {
+			log.Printf("Failed to send to Discord: %v", err)
+		} else {
+			log.Println("✓ Posted to Discord with response suggestions")
+		}
 	} else {
-		log.Println("✓ Posted to Discord")
+		// No Claude integration, just send the post
+		if err := discordClient.SendPost(ctx, post); err != nil {
+			log.Printf("Failed to send to Discord: %v", err)
+		} else {
+			log.Println("✓ Posted to Discord")
+		}
 	}
 }

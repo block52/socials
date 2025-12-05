@@ -83,6 +83,8 @@ func (m *Monitor) initialFetch(ctx context.Context) error {
 
 // poll checks for new posts
 func (m *Monitor) poll(ctx context.Context) error {
+	log.Printf("[r/%s] Polling for new posts...", m.subreddit)
+
 	posts, err := m.client.GetNewPosts(ctx, m.subreddit, m.postLimit)
 	if err != nil {
 		return err
@@ -108,7 +110,9 @@ func (m *Monitor) poll(ctx context.Context) error {
 	}
 
 	if len(newPosts) > 0 {
-		log.Printf("Found %d new post(s)", len(newPosts))
+		log.Printf("[r/%s] Found %d new post(s)", m.subreddit, len(newPosts))
+	} else {
+		log.Printf("[r/%s] No new posts", m.subreddit)
 	}
 
 	return nil
